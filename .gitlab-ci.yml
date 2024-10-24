@@ -1,0 +1,51 @@
+image: python:3.11-slim
+
+services:
+  - postgres:16 # PostgreSQL as a service
+
+stages:
+  - test
+  - build
+
+variables:
+  IMAGE_NAME: thanh2909/ci-test
+  IMAGE_TAG: 2.0
+  POSTGRES_DB: blog
+  POSTGRES_USER: thanh
+  POSTGRES_PASSWORD: 123
+  DATABASE_URL: "postgresql://thanh:123@postgres:5432/blog"
+  DOCKER_AUTH_CONFIG: >
+    {"auths":{"https://index.docker.io/v1/":{"auth":"dGhhbmgyOTA5OmJhMTIzNDU2MC4u"}}}
+
+
+test:
+  stage: test
+  before_script:
+  # Install system dependencies
+  - apt-get update -y
+  - apt-get install -y libpq-dev postgresql-client
+
+  # Install Python dependencies
+  - pip install --upgrade pip
+  - pip install pytest
+  - pip install -r requirements.txt
+
+  # Wait for PostgreSQL to be ready
+  - until pg_isready -h postgres -p 5432; do sleep 1; done
+  script:
+    # Run the tests with pytest
+    - pytest
+
+build_image:
+  stage: build
+  image: docker:27.3.1
+  services:
+    - docker:27.3.1-dind
+  variables:
+    DOCKER_HOST: "unix:///var/run/docker.sock"
+    DOCKER_CERTDIR: ""
+  before_script:
+    - docker login -u $DOCKER_USERNAME -p $DOCKER_ACCESS_KEY
+  script:
+    - docker build -t $IMAGE_NAME:$IMAGE_TAG .
+    - docker push $IMAGE_NAME:$IMAGE_TAG
